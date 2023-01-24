@@ -1,0 +1,5 @@
+index,source,sourcetype,_bkt,_cd,_indextime,_kv,_raw,_serial,_si,_sourcetype,_subsecond,_time,action,host,linecount,search,splunk_server
+_audit,audittrail,audittrail,4,4,4,4.0,4,4,4,4,4.0,4,4.0,4,4,2.0,4
+farm_land,/opt/ef_lus_main_linear.csv.gz,csv,1,1,1,0.0,1,1,1,1,0.0,1,0.0,1,1,0.0,1
+pesticide,/opt/aei_fm_salpest09_linear.csv.gz,csv,2,2,2,0.0,2,2,2,2,0.0,2,0.0,2,2,0.0,2
+farm_ind,/opt/ef_m_farmleg_linear (2).csv.gz,csv,1,1,1,0.0,1,1,1,1,0.0,1,0.0,1,1,0.0,1
