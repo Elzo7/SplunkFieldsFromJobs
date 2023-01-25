@@ -16,6 +16,7 @@ def getAllSearchesWholeMonth():
     sid = job_tree.find('./sid').text
     searches_from_month=[]
     fields_from_month={}
+    df_t = pandas.DataFrame(columns=['index','source','sourcetype'])
     while(True):
         response = requests.get('https://192.168.231.160:8089/services/search/jobs/' + sid,data={'output_mode':'json'},verify=False,auth=('admin','qaz123456'))
         if(response.json()['entry'][0]['content']['dispatchState']=='DONE'):
@@ -49,7 +50,6 @@ def getAllSearchesWholeMonth():
                     t_index = result.find("./field[@k='index']")
                     if t_index is not None:
                         t_index = t_index.find('./value/text')
-                        print(t_index.text)
                     t_source = result.find("./field[@k='source']")
                     if t_source is not None:
                         t_source = t_source.find('./value/text')
@@ -61,7 +61,6 @@ def getAllSearchesWholeMonth():
                             if t_index is not None and t_sourcetype is not None and t_source is not None:
                                 used_fields_months[t_index.text] = used_fields_months.get(t_index.text, {})
                                 if (used_fields_months[t_index.text].get(field.attrib['k'], False) == False and field.attrib['k'] != 'source' and field.attrib['k'] != 'sourcetype' and field.attrib['k'] != 'index'):
-
                                     fields_from_month[t_index.text] = fields_from_month.get(t_index.text, {})
                                     fields_from_month[t_index.text][t_source.text] = fields_from_month.get(t_index.text, {}).get(t_source.text, {})
                                     fields_from_month[t_index.text][t_source.text][t_sourcetype.text] = fields_from_month.get(t_index.text, {}).get(t_source.text, {}).get(t_sourcetype.text, {})
@@ -83,26 +82,15 @@ def getAllSearchesWholeMonth():
         dfm = pandas.DataFrame(data=data)
         dfm = dfm.fillna(0)
         dfm.to_csv('report_month.csv', index=False)
-        print(dfm)
+        print(df_t)
 
 def getFieldsFromJobs():
     response = requests.get('https://192.168.231.160:8089/services/search/jobs', verify=False,
                             auth=('admin', 'qaz123456'))
     if (path.exists('report.csv')):
-        test_fields = {}
-        pomoc = pandas.read_csv('report.csv').to_dict('records')
-        for record in pomoc:
-            test_fields[record['index']] = test_fields.get(record['index'], {})
-            test_fields[record['index']][record['source']] = test_fields[record['index']].get(record['source'], {})
-            test_fields[record['index']][record['source']][record['sourcetype']] = test_fields[record['index']][
-                record['source']].get(record['sourcetype'], {})
-            for de in record:
-                if (de != 'index' and de != 'source' and de != 'sourcetype'):
-                    test_fields[record['index']][record['source']][record['sourcetype']][de] = \
-                    test_fields[record['index']][record['source']][record['sourcetype']].get(de, record[de])
+        test_df=pandas.read_csv('report.csv')
     else:
-        test_fields = {}
-    index_initialized = {}
+        test_df =pandas.DataFrame(columns=['index','source','sourcetype'])
     dict_saved_search = xmltodict.parse(response.content)
     saved_searches = dict_saved_search.get('feed').get('entry')
     search_ids = []
@@ -114,9 +102,6 @@ def getFieldsFromJobs():
     for id in search_ids:
         url = id + '/results_preview?count=0'
         response = requests.get(url, verify=False, auth=('admin', 'qaz123456'))
-        used_fields_for_index = {}
-        used_fields_for_source = {}
-        used_fields_for_sourcetype = {}
         used_fields = {}
         if (response.content.decode('utf-8') != ''):
             job_tree = E.ElementTree(E.fromstring(response.content.decode('utf-8'))).getroot()
@@ -124,45 +109,38 @@ def getFieldsFromJobs():
                 t_index = result.find("./field[@k='index']")
                 if t_index is not None:
                     t_index = t_index.find('./value/text')
+                    filter_index= test_df['index'] == t_index.text
                 t_source = result.find("./field[@k='source']")
                 if t_source is not None:
                     t_source = t_source.find('./value/text')
+                    filter_source = test_df['source'] == t_source.text
                 t_sourcetype = result.find("./field[@k='sourcetype']")
                 if t_sourcetype is not None:
                     t_sourcetype = t_sourcetype.find('./value/text')
+                    filter_sourcetype = test_df['sourcetype'] ==t_sourcetype.text
+                if t_index is not None and t_sourcetype is not None and t_source is not None:
+                    if not ((filter_index) & (filter_sourcetype) & (filter_source)).any():
+                        pomoc = {'index': t_index.text, 'source': t_source.text, 'sourcetype': t_sourcetype.text}
+                        test_df2 = pandas.DataFrame(data=pomoc, index=[0])
+                        test_df = pandas.concat([test_df, test_df2], ignore_index=True)
+                        test_df = test_df.fillna(0)
                 for field in result:
                     if (field.tag == 'field'):
                         if t_index is not None and t_sourcetype is not None and t_source is not None:
                             used_fields[t_index.text] = used_fields.get(t_index.text, {})
-                            if (used_fields[t_index.text].get(field.attrib['k'], False) == False and field.attrib[
+                            used_fields[t_index.text][t_source.text] = used_fields[t_index.text].get(t_source.text, {})
+                            used_fields[t_index.text][t_source.text][t_sourcetype.text] = used_fields[t_index.text][t_source.text].get(t_sourcetype.text, {})
+                            if not field.attrib['k'] in test_df.columns:
+                                test_df[field.attrib['k']] = 0
+                            if (used_fields[t_index.text][t_source.text][t_sourcetype.text].get(field.attrib['k'], False) == False and field.attrib[
                                 'k'] != 'source' and field.attrib['k'] != 'sourcetype' and field.attrib[
                                 'k'] != 'index'):
-                                test_fields[t_index.text] = test_fields.get(t_index.text, {})
-                                test_fields[t_index.text][t_source.text] = test_fields.get(t_index.text, {}).get(
-                                    t_source.text, {})
-                                test_fields[t_index.text][t_source.text][t_sourcetype.text] = test_fields.get(
-                                    t_index.text, {}).get(t_source.text, {}).get(t_sourcetype.text, {})
-                                test_fields[t_index.text][t_source.text][t_sourcetype.text][
-                                    field.attrib['k']] = test_fields.get(t_index.text, {}).get(t_source.text, {}).get(
-                                    t_sourcetype.text, {}).get(field.attrib['k'], 0) + 1
-                                used_fields[t_index.text][field.attrib['k']] = used_fields.get(t_index.text).get(
+                                test_df[field.attrib['k']]=test_df[field.attrib['k']].mask(filter_source&filter_sourcetype&filter_index,test_df[field.attrib['k']]+1)
+                                used_fields[t_index.text][t_source.text][t_sourcetype.text][field.attrib['k']] = used_fields[t_index.text][t_source.text][t_sourcetype.text].get(
                                     field.attrib['k'], True)
-    if (test_fields != {}):
-        data = []
-        for index in test_fields:
-            pdata = {'index': index}
-            print(pdata)
-            for source in test_fields[index]:
-                pdata['source'] = source
-                for sourcetype in test_fields[index][source]:
-                    pdata['sourcetype'] = sourcetype
-                    for pair in test_fields[index][source][sourcetype]:
-                        pdata[pair] = test_fields[index][source][sourcetype][pair]
-            data.append(pdata)
-        df = pandas.DataFrame(data=data)
-        df = df.fillna(0)
-        df.to_csv('report.csv', index=False)
-        print(df)
+        test_df.to_csv('report.csv', index=False)
+        print(test_df)
+
 
 
 if __name__ == '__main__':
@@ -175,6 +153,6 @@ if __name__ == '__main__':
     ]
     )
     #Pobranie danych z całego miesiaca
-    getAllSearchesWholeMonth()
-    #getFieldsFromJobs()
+    #getAllSearchesWholeMonth()
+    getFieldsFromJobs()
 
